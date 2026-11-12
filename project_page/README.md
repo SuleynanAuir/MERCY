@@ -28,7 +28,7 @@ The page works without JavaScript: the table and figures remain visible, full-si
 
 The target address for this repository is:
 
-`https://suleynanauir.github.io/MERCY-Monocular-Event-Locally-RigidMotion-Coherent-4DGS-Reconstruct/`
+`https://suleynanauir.github.io/MERCY/`
 
 In repository **Settings → Pages**, choose **GitHub Actions** as the publishing source. The workflow deploys when `project_page/` changes on `main`, or when manually started from Actions. It publishes only the output of the packaging script, not the repository root or unrelated experiment files.
 
