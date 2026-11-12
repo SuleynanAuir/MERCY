@@ -230,7 +230,7 @@ def audited_source_fingerprints(audit):
 class ComparisonRenderer:
     def __init__(self, path, cache):
         self.path, self.cache = Path(path), cache
-        self.status = {'ready': False, 'progress': 0, 'message': '加载同步对比场景'}
+        self.status = {'ready': False, 'progress': 0, 'message': 'Loading synchronized comparison scene'}
         self.pose_cache = OrderedDict()
         self.cache_limit = 0 if cache == 'cpu' else 48
         self.image_cache = EncodedFrameCache()
@@ -260,7 +260,7 @@ class ComparisonRenderer:
         if settings.get('format') != 'lego_event_comparison_v1':
             raise ValueError('Unsupported comparison manifest')
         left, right, candidate = [Path(settings[k]) for k in ('baseline', 'right_baseline', 'candidate')]
-        self.progress(5, '校验事件校正、初始模型及运动数据')
+        self.progress(5, 'Validating event correction, initial model, and motion data')
         right_meta, correction, audit = verify_candidate(right, candidate, allow_unapproved=True)
         self.verified_v3 = {'baseline': str(right.resolve()), 'candidate': str(candidate.resolve()),
                             'artifact_sha256': dict(audit['artifact_sha256'])}
@@ -297,7 +297,7 @@ class ComparisonRenderer:
                 raise ValueError('Comparison manifest differs from audited multiview completion report')
             self.completion = CompactCompletion(extension, 'cuda')
         self.rest = torch.from_numpy(self.poses[1][0].copy()).cuda()
-        self.progress(65, '加载共享高斯；左右视图共享时间与相机')
+        self.progress(65, 'Loading shared Gaussians; both views share time and camera')
         self.model = GaussianModel(3, with_motion_mask=False)
         self.model.load_ply(left_meta['source'])
         if len(self.model._xyz) != left_meta['gaussian_count']:
@@ -356,22 +356,22 @@ class ComparisonRenderer:
         self.pipe = SimpleNamespace(convert_SHs_python=False, compute_cov3D_python=False, debug=False)
         self.backgrounds = {key: torch.tensor(value, dtype=torch.float32, device='cuda') for key, value in BACKGROUNDS.items()}
         frames = left_meta['frame_count']
-        self.info = {'name': 'Lego · 最原始 / 进一步优化', 'comparison': True,
+        self.info = {'name': 'Lego · Original / Refined', 'comparison': True,
                      **audited_source_fingerprints(audit),
                      'left_render_sampling': self.side_sampling[0],
                      'right_render_sampling': self.side_sampling[1],
-                     'left_label': '最原始结果 · 未校正初始动画',
-                     'right_label': settings.get('right_label', '经过事件校正 · 改进候选'),
+                     'left_label': 'Original result · Uncorrected initial animation',
+                     'right_label': settings.get('right_label', 'Event-corrected · Refined candidate'),
                      'geometry_repaired': self.geometry_repaired,
                      **({'geometry_repair_scope': (
-                         '右侧保留正面已校正高斯，使用已知 Blender 网格补充多视角刚性表面；未观测背面为几何与外观先验，不是单目事件证实的重建。新增点沿用同一硬连接运动，弹性带保持原始高斯。仍有局部缺口，尤其是底板与少数静态件，尚不代表任意视角完整。'
+                         'The right side preserves corrected front-facing Gaussians and adds rigid surfaces from known Blender meshes. Unobserved backsides use geometry and appearance priors, not monocular-event verification. Added points share the hard-connected motion; elastic bands retain original Gaussians. Local gaps remain, especially at the base and some static parts; arbitrary-view completeness is not established.'
                          if geometry_report['format'] == MULTIVIEW_FORMAT else
-                         '右侧依据已知几何先验与多个时刻的视频观测重建运动刚性部件，再经事件校正；静态件与弹性带的原始高斯保留，左侧为原始模型。'
+                         'The right side reconstructs moving rigid parts using known geometry and video observations at multiple times, followed by event correction. Original static-part and elastic-band Gaussians are retained; the left side is the original model.'
                          if geometry_report['format'] == 'lego_prior_surface_rebuild_v1' else
-                         '右侧采用深度修复，并补充后续显露表面的高斯；原有高斯保留，新增点绑定刚性部件；事件验收独立。'
+                         'The right side uses depth repair and adds Gaussians for subsequently revealed surfaces. Original Gaussians are retained; new points bind to rigid parts. Event acceptance is independent.'
                          if geometry_report['format'] == 'lego_part_completion_v1' else
-                         '右侧采用部件深度修复高斯；仅位置和尺度可变，点数、颜色、透明度和初始旋转保持不变；事件验收独立。') +
-                         (' 新部件再经 RGB、边缘及事件约束细节拟合；运动保持不变，事件验收结论独立。'
+                         'The right side repairs per-part Gaussian depth. Only positions and scales vary; point count, colors, opacity, and initial rotations remain fixed. Event acceptance is independent.') +
+                         (' New parts receive detail fitting with RGB, edge, and event constraints. Motion remains fixed; event acceptance is independent.'
                           if geometry_report.get('appearance_refinement') else '')}
                         if self.geometry_repaired else {}),
                      **({'gaussian_cleanup': {'modified_gaussians': cleaned['report']['modified_gaussian_count'],
@@ -392,7 +392,7 @@ class ComparisonRenderer:
                           'completion_extension_sha256': audit['artifact_sha256']['completion_extension']}}
                         if self.completion is not None else {}),
                      'times_seconds': [i / left_meta['fps'] for i in range(frames)], 'rpm': [None] * frames,
-                     'motion_label': '左右同帧 · 同相机 · 真实高斯渲染', 'default_stream_rate': 30,
+                     'motion_label': 'Same frame · Same camera · Actual Gaussian rendering', 'default_stream_rate': 30,
                      'default_stream_quality': 95, 'default_still_quality': 95,
                      'default_resolution': 640, 'default_background': 'light', 'fovy': camera['fovy_degrees'],
                      'cache': 'gpu-lru' if self.cache_limit else 'cpu',
@@ -410,20 +410,20 @@ class ComparisonRenderer:
                                           'failed_intervals': audit['failed_intervals']}}
         if cleaned is not None:
             self.info['geometry_repair_scope'] += (
-                ' 已统一部分未观测静态高斯的部件颜色先验；几何、不透明度和运动不变，背面颜色仍非实测纹理。'
+                ' Part-color priors are unified for some unobserved static Gaussians. Geometry, opacity, and motion are unchanged; backside colors are not measured textures.'
                 if cleaned['report']['attributes'] == ['dc_gray'] else
-                ' 已对部分原始静态高斯施加独立透明度清理层；位置、颜色、行序与运动不变。')
-            self.info['geometry_repair_scope'] += (' 结果已重新执行整段事件检查；这不是二维图像去噪，'
-                                                  '也不代表所有斑驳或缺口已消除。')
+                ' An independent opacity cleanup layer affects some original static Gaussians. Positions, colors, row ordering, and motion are unchanged.')
+            self.info['geometry_repair_scope'] += (' Full-sequence event checks have been repeated. This is not 2D image denoising,'
+                                                  ' nor does it establish removal of every blotch or gap.')
         if residual is not None:
             self.info['color_residual'] = {
                 'report_sha256': audit['artifact_sha256']['color_residual_report'],
                 'residual_sha256': audit['artifact_sha256']['color_residual'],
                 'optimized_gaussians': residual['report']['optimized_count'],
                 'maximum_linear_rgb_delta': residual['report']['maximum_delta']}
-            self.info['geometry_repair_scope'] += (' 已加入全局与局部细节的有界高斯颜色残差优化，'
-                '使用视频、多尺度梯度和训练事件约束；几何、透明度与运动不变。'
-                '未观测面的完整性仍不作保证，事件未通过区间继续如实显示。')
+            self.info['geometry_repair_scope'] += (' Bounded global and local Gaussian color residual optimization is enabled,'
+                ' using video, multiscale gradients, and training events. Geometry, opacity, and motion remain fixed.'
+                ' Unobserved surface completeness is not guaranteed; failed event intervals remain visible.')
         if detail is not None:
             self.info['protected_surface_detail'] = {
                 'report_sha256': audit['artifact_sha256']['surface_detail_report'],
@@ -431,9 +431,9 @@ class ComparisonRenderer:
                 'retired_gaussians': detail['report']['retired_gaussian_count'],
                 'added_gaussians': detail['report']['added_gaussian_count'],
                 'part_ids': detail['report']['allowed_part_ids']}
-            self.info['geometry_repair_scope'] += (' 车顶及固定部件的局部表面加入致密薄层高斯，'
-                '保留原始视角可见点，并检查替换后的表面缺口；运动与已有颜色优化保留。'
-                '未观测的背面仍采用网格和颜色先验，不代表真实背面已由事件验证。')
+            self.info['geometry_repair_scope'] += (' Dense thin-layer Gaussians augment local roof and fixed-part surfaces,'
+                ' preserving points visible from the original view and checking replacement gaps. Motion and existing color optimization are retained.'
+                ' Unobserved backsides still use mesh and color priors, not event-verified backside reconstruction.')
         if rebuilt_static is not None:
             self.info['static_surface_rebuild'] = {
                 'report_sha256': audit['artifact_sha256']['static_surface_report'],
@@ -441,8 +441,8 @@ class ComparisonRenderer:
                 'retired_gaussians': rebuilt_static['report']['retired_gaussian_count'],
                 'added_gaussians': rebuilt_static['report']['added_gaussian_count'],
                 'part_ids': rebuilt_static['report']['allowed_part_ids']}
-            self.info['geometry_repair_scope'] += (' 驾驶舱车顶的5个固定零件另按真实网格表面重建高斯；'
-                '可见面采用视频颜色，未观测面仍是先验。窗框、立柱和运动参数保留；结果另经完整事件复验。')
+            self.info['geometry_repair_scope'] += (' Five fixed cabin-roof parts are reconstructed separately from their mesh surfaces.'
+                ' Visible surfaces use video colors; unobserved surfaces remain priors. Window frames, pillars, and motion parameters are preserved; full event revalidation is performed.')
         from utils.gs_clay import gs_clay_info, canonical_coordinates
         bounds_xyz = torch.cat([geometry[0] for geometry in self.side_geometry])
         _, bounds = canonical_coordinates(bounds_xyz)
@@ -452,8 +452,8 @@ class ComparisonRenderer:
         from utils.gs_pseudocolor import pseudocolor_materials, pseudocolor_info
         self.pseudocolor_materials = pseudocolor_materials([geometry[0] for geometry in self.side_geometry])
         self.info['pseudocolor'] = pseudocolor_info()
-        self.info['mesh'] = {'available': False, 'description': '当前场景未生成高斯重建网格。'}
-        self.info['hybrid'] = {'available': False, 'description': '当前场景未生成 Mesh＋Gaussian 绑定。'}
+        self.info['mesh'] = {'available': False, 'description': 'No Gaussian-reconstructed mesh is available for this scene.'}
+        self.info['hybrid'] = {'available': False, 'description': 'No Mesh + Gaussian binding is available for this scene.'}
         if settings.get('deformation'):
             from utils.v3_deformation import load_v3_deformation
             deformation_path = Path(settings['deformation'])
@@ -480,7 +480,7 @@ class ComparisonRenderer:
                 self.info['mesh'] = self.mesh.info
             except Exception:
                 self.mesh = None
-                self.info['mesh'] = {'available': False, 'description': 'Mesh 加载失败；高斯模式仍可使用。'}
+                self.info['mesh'] = {'available': False, 'description': 'Mesh loading failed; Gaussian mode remains available.'}
                 logging.getLogger('gaussian-viewer').exception('Optional Mesh failed to load')
         if self.mesh is not None and settings.get('hybrid_paths'):
             try:
@@ -500,29 +500,29 @@ class ComparisonRenderer:
                     default_quality=DEFAULT_HYBRID_QUALITY, max_render_side=3072,
                     reconstruction_filter='native_sampling_with_depth_alpha_guided_denoising',
                     quality_descriptions={
-                        'surface': '保留 GS 原生外观，在表面内部轻度去噪，保护孔洞与轮廓。Mesh 绑定驱动运动；这是显示去噪，未修改源几何。',
-                        'native': '采用与单独 GS 一致的采样，关闭表面柔化；Mesh 绑定仍驱动运动。这是混合渲染，未修改源几何。',
-                        'balanced': '旧版均衡效果，仅供对照。高采样可能使细碎颗粒更明显，可切回表面柔化。',
-                        'detail': '旧版高采样效果，仅供对照。本场景中颗粒更明显，建议切回表面柔化。'},
+                        'surface': 'Preserves native GS appearance with mild interior denoising and protected holes and silhouettes. Mesh binding drives motion; this is display denoising without source-geometry changes.',
+                        'native': 'Uses standalone-GS sampling without surface softening; mesh binding still drives motion. Hybrid rendering leaves source geometry unchanged.',
+                        'balanced': 'Legacy balanced appearance for comparison. Higher sampling may reveal grain; surface softening is available.',
+                        'detail': 'Legacy high-sampling appearance for comparison. Grain is more visible in this scene; surface softening is recommended.'},
                     left_label='V1 · Mesh＋Gaussian', right_label='V3 · Mesh＋Gaussian',
                     left=bindings[0].info, right=bindings[1].info,
-                    description='Mesh 绑定驱动运动，保留 GS 原生外观；表面柔化轻度抑制内部颗粒，并保护轮廓、孔洞边缘和透明区域。可切换 GS 原生外观对照。混合渲染，并非纯网格；这是显示去噪，未修复源模型几何。')
+                    description='Mesh binding drives motion while preserving native GS appearance. Surface softening mildly suppresses interior grain and protects silhouettes, hole edges, and transparent regions. Native GS appearance is available for comparison. This is hybrid rendering and display denoising, not source-geometry repair or pure mesh rendering.')
             except Exception:
                 self.hybrid = None
-                self.info['hybrid'] = {'available': False, 'description': '混合模式绑定加载失败；可使用 Gaussian 或纯 Mesh。'}
+                self.info['hybrid'] = {'available': False, 'description': 'Hybrid binding failed to load; Gaussian or pure Mesh mode remains available.'}
                 logging.getLogger('gaussian-viewer').exception('Optional hybrid binding failed to load')
         if self.deformation is not None:
             for mode in ('mesh', 'hybrid', 'clay', 'pseudocolor'):
                 if self.info[mode]['available']:
                     self.info[mode]['deformation_enabled'] = True
-                    self.info[mode]['description'] += ' 右侧 V3 同步叠加局部 MLP 关节残差；主运动和刚性保持。'
+                    self.info[mode]['description'] += ' The right V3 view applies synchronized local MLP joint residuals while preserving primary motion and rigidity.'
                     for quality in self.info[mode].get('quality_descriptions', {}):
-                        self.info[mode]['quality_descriptions'][quality] += ' V3 已启用局部 MLP 辅助运动。'
-        self.progress(95, '预热双视图实时渲染')
+                        self.info[mode]['quality_descriptions'][quality] += ' V3 local MLP auxiliary motion is enabled.'
+        self.progress(95, 'Warming up dual-view realtime rendering')
         self.render(validate_request({'width': 512, 'height': 512, 'fovy': camera['fovy_degrees']}, frames))
         if not getattr(self, 'prewarm', True):
             self.info['prewarmed_frames'] = 0
-            self.status = dict(ready=True, progress=100, message='就绪', scene=self.info)
+            self.status = dict(ready=True, progress=100, message='Ready', scene=self.info)
             return
         # Render every source frame of the initial view once, before autoplay.
         # This is an exact JPEG cache of 3D Gaussian renders, not a substituted
@@ -534,7 +534,7 @@ class ComparisonRenderer:
                                           'background': self.info['default_background'],
                                           'fovy': camera['fovy_degrees']}, frames))
             if (index + 1) % 40 == 0 or index + 1 == frames:
-                self.progress(95 + int(4 * (index + 1) / frames), f'预缓存双视图 {index + 1}/{frames} 帧')
+                self.progress(95 + int(4 * (index + 1) / frames), f"""Precaching dual views: frame {index + 1}/{frames}""")
         self.info['prewarmed_frames'] = frames
         for mode, clay_style in (('clay', 'wire'), ('clay', 'solid'), ('pseudocolor', 'solid'), ('mesh', 'wire')):
             if self.info[mode]['available']:
@@ -546,7 +546,7 @@ class ComparisonRenderer:
                                                   'background': self.info['default_background'],
                                                   'fovy': camera['fovy_degrees']}, frames))
                     if (index + 1) % 40 == 0 or index + 1 == frames:
-                        self.progress(99, f'预缓存 V1 / V3 {mode} 对比 {index + 1}/{frames} 帧')
+                        self.progress(99, f"""Precaching V1 / V3 {mode} comparison: frame {index + 1}/{frames}""")
                 self.info[mode]['prewarmed_frames'] = frames
         if self.hybrid is not None:
             resolution = self.info['hybrid']['default_resolution']
@@ -556,11 +556,11 @@ class ComparisonRenderer:
                         'width': resolution, 'height': resolution, 'quality': self.info['default_stream_quality'],
                         'background': self.info['default_background'], 'fovy': camera['fovy_degrees']}, frames))
                     if (index + 1) % 40 == 0 or index + 1 == frames:
-                        label = '表面柔化' if quality == 'surface' else 'GS 原生外观'
-                        self.progress(99, f'预缓存 {label} 动态对比 {index + 1}/{frames} 帧')
+                        label = 'Surface softening' if quality == 'surface' else 'Native GS appearance'
+                        self.progress(99, f"""Precaching {label} dynamic comparison: frame {index + 1}/{frames}""")
             self.info['hybrid']['prewarmed_frames'] = frames
             self.info['hybrid']['prewarmed_qualities'] = ['surface', 'native']
-        self.status = {'ready': True, 'progress': 100, 'message': '就绪', 'scene': self.info}
+        self.status = {'ready': True, 'progress': 100, 'message': 'Ready', 'scene': self.info}
         logging.getLogger('gaussian-viewer').info('Ready: %d paired frames cached, %.1f MiB JPEG',
                                                  frames, self.image_cache.bytes / 1024**2)
 

@@ -43,10 +43,10 @@ def load_v3_deformation(path, renderer):
             or int(field.rows.max()) >= len(renderer.side_geometry[1][0])):
         raise ValueError('Deformation timeline or source rows do not match V3')
     info = dict(
-        name='Lego · V1 / V3 对比', left_label='V1 · 原始结果',
-        right_label='V3 · Blender＋局部 MLP 变形',
-        motion_label='左右同帧 · V3：Blender 主运动＋局部 MLP 辅助',
-        description='V3 已集成局部 MLP 变形、关节刚性约束和时间平滑；保留 Blender 主运动、外观与运动幅度，采用事件监督及相位、连接检查。',
+        name='Lego · V1 / V3 comparison', left_label='V1 · Original result',
+        right_label='V3 · Blender + Local MLP deformation',
+        motion_label='Synchronized frames · V3: Blender primary motion + Local MLP assistance',
+        description='V3 integrates local MLP deformation, rigid-joint constraints, and temporal smoothing. Blender primary motion, appearance, and motion amplitude are preserved, with event supervision and phase and connection checks.',
         deformation=dict(enabled=True, method='local_joint_mlp',
                          checkpoint_sha256=settings['checkpoint_sha256'],
                          audit_sha256=settings['audit_sha256'],

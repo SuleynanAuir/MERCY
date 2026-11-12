@@ -50,11 +50,11 @@ def studio_clay(normals, positions):
 
 
 def clay_info(mesh_info):
-    info = dict(mesh_info, left_label='V1 · 灰模 / Clay', right_label='V3 · 灰模 / Clay',
-                description='统一灰色材质与柔和棚灯，突出轮廓和表面起伏；左右使用各自网格与运动，支持同步旋转、缩放和播放。')
+    info = dict(mesh_info, left_label='V1 · Clay', right_label='V3 · Clay',
+                description='Uniform gray material and soft studio lighting emphasize silhouettes and surface relief; each side uses its own mesh and motion with synchronized orbit, zoom, and playback.')
     if mesh_info.get('surface_regularized'):
-        info['description'] = '按运动部件去噪、局部补洞后的灰模表面；保留主要轮廓、关节与同步运动。'
+        info['description'] = 'Clay surfaces with per-part denoising and local hole filling; main silhouettes, joints, and synchronized motion are preserved.'
     if mesh_info.get('feature_reconstructed'):
-        info['description'] = '保边表面去噪与局部补洞，减少颗粒感并保留轮廓；表面光照随部件同步运动。'
+        info['description'] = 'Edge-preserving surface denoising and local hole filling reduce grain while preserving silhouettes; lighting follows part motion.'
         info['default_resolution'] = 1024
     return info

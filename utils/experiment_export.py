@@ -30,14 +30,14 @@ class ExportProgress:
     """Ordered workflow progress; percentages describe work, not time remaining."""
     def __init__(self, operation, callback):
         self.callback = callback
-        self.stages = [('prepare', '准备相机与配置')]
+        self.stages = [('prepare', 'Preparing camera and configuration')]
         if operation != 'benchmark':
-            self.stages += [('frames', '导出采样帧与关键运动数据'), ('motion', '保存运动轨迹'),
-                            ('reference', '保存参考数据')]
+            self.stages += [('frames', 'Exporting sampled frames and key motion data'), ('motion', 'Saving motion trajectories'),
+                            ('reference', 'Saving reference data')]
         if operation in ('complete', 'benchmark'):
-            self.stages += [('warmup', '预热渲染器'), ('benchmark', '重复性能测量')]
-        self.stages += [('sources', '记录模型来源与哈希'), ('code', '保存配置与评测脚本'),
-                        ('hashes', '校验文件哈希'), ('archive', '打包下载文件')]
+            self.stages += [('warmup', 'Warming up renderer'), ('benchmark', 'Repeating performance measurements')]
+        self.stages += [('sources', 'Recording model provenance and hashes'), ('code', 'Saving configuration and evaluation scripts'),
+                        ('hashes', 'Verifying file hashes'), ('archive', 'Packaging download')]
         self.stage = None
         self.last_update = 0.
 
@@ -149,30 +149,30 @@ def end_panel(request, started):
 
 def validate_plan(data, info):
     if not isinstance(data, dict) or data.get('operation') not in ('frame', 'sequence', 'benchmark', 'complete'):
-        raise ValueError('请选择一键保存、当前帧、固定序列或性能测量')
+        raise ValueError('Select full export, current frame, fixed sequence, or benchmark')
     if data['operation'] == 'complete':
         if not 1 <= info['frame_count'] <= 10000:
-            raise ValueError('一键保存支持 1–10000 帧')
+            raise ValueError('Full export supports 1-10000 frames')
         settings = validate_request({'fovy': info['fovy'], **data.get('settings', {})}, info['frame_count'])
         step = data.get('sample_step', info.get('export_sample_step', SAMPLE_STEP))
         if type(step) is not int or not 1 <= step <= 10000:
-            raise ValueError('采样间隔必须为 1–10000 的整数')
+            raise ValueError('Sample interval must be an integer from 1 to 10000')
         # The server expands the whole source timeline, independent of the UI's
         # range controls, previously imported plans or client-supplied samples.
         data = {**data, 'samples': [dict(settings, frame=frame, time_seconds=info['times_seconds'][frame])
                                     for frame in range(0, info['frame_count'], step)]}
     samples = data.get('samples')
     if not isinstance(samples, list) or not 1 <= len(samples) <= 10000:
-        raise ValueError('采样表需要 1–10000 个采样点')
+        raise ValueError('Sample plan requires 1-10000 samples')
     if data['operation'] == 'frame' and len(samples) != 1:
-        raise ValueError('当前帧导出只能包含一个采样点')
+        raise ValueError('Current-frame export must contain exactly one sample')
     times = np.asarray(info['times_seconds'], dtype=float)
     if times.shape != (info['frame_count'],) or not np.isfinite(times).all() or np.any(np.diff(times) <= 0):
-        raise ValueError('源时间轴必须有限且严格递增')
+        raise ValueError('Source timeline must be finite and strictly increasing')
     validated = []
     for sample in samples:
         if not isinstance(sample, dict):
-            raise ValueError('无效采样点')
+            raise ValueError('Invalid sample')
         request = validate_request(sample, len(times))
         if 'background_rgb' in sample:
             color = np.asarray(sample['background_rgb'], dtype=float)
@@ -181,10 +181,10 @@ def validate_plan(data, info):
             request['background_rgb'] = color.tolist()
         mode = request['render_mode']
         if mode != 'gaussian' and mode not in info.get('comparison_modes', []) and not info.get(mode, {}).get('available'):
-            raise ValueError(f'当前模型不支持显示模式：{mode}')
+            raise ValueError(f"""Display mode is unsupported by this model: {mode}""")
         actual = float(times[request['frame']])
         if not math.isfinite(sample.get('time_seconds', math.nan)) or abs(sample['time_seconds'] - actual) > 1e-8:
-            raise ValueError('保存的时间表与当前模型不一致；请重新保存采样表')
+            raise ValueError('Saved timeline differs from the current model; save the sample plan again')
         if 'camera' in sample:
             camera = sample['camera']
             pose = np.asarray(camera['pose_opengl_c2w'], dtype=float)
@@ -192,24 +192,24 @@ def validate_plan(data, info):
                     or not np.allclose(pose[3], [0, 0, 0, 1], atol=1e-7, rtol=0)
                     or not np.allclose(pose[:3, :3].T @ pose[:3, :3], np.eye(3), atol=1e-5, rtol=0)
                     or not np.isclose(np.linalg.det(pose[:3, :3]), 1, atol=1e-5, rtol=0)):
-                raise ValueError('无效的已保存相机姿态')
+                raise ValueError('Invalid saved camera pose')
             f = request['height'] / (2*np.tan(np.deg2rad(request['fovy'])/2))
             expected = [[f, 0, request['width']/2], [0, f, request['height']/2], [0, 0, 1]]
             if (camera['width'] != request['width'] or camera['height'] != request['height']
                     or np.asarray(camera['K']).shape != (3, 3)
                     or not np.allclose(camera['K'], expected, rtol=0, atol=1e-5)):
-                raise ValueError('已保存相机内参与渲染尺寸不一致')
+                raise ValueError('Saved camera intrinsics do not match rendering dimensions')
             request['camera'] = dict(pose_opengl_c2w=pose.astype(np.float32).tolist(), K=expected,
                                      width=request['width'], height=request['height'], fovy_degrees=request['fovy'])
         validated.append({**request, 'time_seconds': actual})
     if any(b['frame'] <= a['frame'] for a, b in zip(validated, validated[1:])):
-        raise ValueError('采样帧必须严格递增，不能重复')
+        raise ValueError('Sampled frames must be strictly increasing without duplicates')
     for key, default, low, high in [('warmup', 20, 1, 100), ('repeats', 5, 1, 100)]:
         value = data.get(key, default)
         if data['operation'] in ('complete', 'benchmark') and (type(value) is not int or not low <= value <= high):
-            raise ValueError(f'{key} 超出范围 {low}–{high}')
+            raise ValueError(f"""{key} is outside the range {low}-{high}""")
     if data['operation'] in ('complete', 'benchmark') and len(samples) * data.get('repeats', 5) > 50000:
-        raise ValueError('性能测量最多 50000 次渲染')
+        raise ValueError('Benchmark is limited to 50000 renders')
     plan = dict(operation=data['operation'], samples=validated,
                 warmup=data.get('warmup', 20), repeats=data.get('repeats', 5))
     if data['operation'] not in ('complete', 'benchmark'): plan.update(warmup=0, repeats=1)
@@ -236,13 +236,13 @@ def reference_plan(plan, info, reference_path):
         return plan
     source = json.loads(Path(reference_path).read_text())
     if source.get('format') != 'scgs_experiment_reference_v1' or not source.get('provenance'):
-        raise ValueError('无效的独立参考数据清单')
+        raise ValueError('Invalid independent reference manifest')
     lookup = {row['frame']: row for row in source['samples']}
     samples = []
     for sample in plan['samples']:
         row = lookup.get(sample['frame'])
         if not row or abs(row['time_seconds']-sample['time_seconds']) > 1e-8:
-            raise ValueError(f'参考数据未覆盖每 {plan["sample_step"]} 帧采样表；请重新准备参考数据')
+            raise ValueError(f"""Reference data does not cover the every-{plan["sample_step"]}-frame sample plan; prepare references again""")
         camera = row.get('camera', source.get('camera'))
         fovy = float(np.rad2deg(2*np.arctan(camera['height']/(2*camera['K'][1][1]))))
         samples.append(dict(sample, camera=camera, width=camera['width'], height=camera['height'],
@@ -541,8 +541,8 @@ def save_bundle_guide(root, manifest, histories):
     availability = dict(frame_count=expected, version_count=len(manifest['versions']), reference={}, motion={},
                         limitations=manifest['unavailable'])
     missing = []
-    for key, label in (('rgb', '独立 RGB 真值'), ('foreground_mask', '固定前景掩码'),
-                       ('part_mask', '固定部件掩码'), ('events', '原始事件计数')):
+    for key, label in (('rgb', 'Independent RGB ground truth'), ('foreground_mask', 'Fixed foreground mask'),
+                       ('part_mask', 'Fixed part mask'), ('events', 'Raw event counts')):
         # A sequence's first frame has no preceding event interval.
         required = max(expected-1, 0) if key == 'events' else expected
         rows = references[1:] if key == 'events' else references
@@ -550,20 +550,20 @@ def save_bundle_guide(root, manifest, histories):
         aligned = sum(key in row and row.get('aligned', False) for row in rows)
         availability['reference'][key] = dict(saved=count, expected=required, aligned=aligned)
         if count < required: missing.append(f'{label}：{count}/{required}')
-        elif aligned < required: missing.append(f'{label}：{required-aligned} 个采样点与导出相机/时间不匹配')
+        elif aligned < required: missing.append(f"""{label}: {required-aligned} samples do not match export camera/time""")
     for side, rows in histories.items():
         present = set.intersection(*(set(row['motion']) for row in rows))
         availability['motion'][str(side)] = sorted(present)
-        for key, label in (('group_quaternions', '部件旋转'), ('group_translations', '部件平移'),
-                           ('joint_angles', '关节角'), ('joint_pairs', '关节连接'), ('joint_pivots', '关节枢轴')):
+        for key, label in (('group_quaternions', 'Part rotations'), ('group_translations', 'Part translations'),
+                           ('joint_angles', 'Joint angles'), ('joint_pairs', 'Joint connections'), ('joint_pivots', 'Joint pivots')):
             if key not in present:
-                missing.append(f'版本 {side}：转动包含偏轴分量；已保存完整旋转、扭转投影与偏轴角，不能作为纯单轴铰链角'
-                    if key=='joint_angles' and 'joint_twist_angles' in present else f'版本 {side}：未提供已验证的{label}')
+                missing.append(f"""Version {side}: rotation includes off-axis components. Full rotation, twist projection, and off-axis angle were saved; these are not pure single-axis hinge angles"""
+                    if key=='joint_angles' and 'joint_twist_angles' in present else f"""Version {side}: verified {label} was not provided""")
     if any(not record['available'] for record in manifest['sources']):
-        missing.append('部分来源文件不可用；参见 manifest.json 的 sources')
+        missing.append('Some source files are unavailable; see sources in manifest.json')
     if any(row.get('events') and not all((row.get('event_calibration') or {}).get(k)
             for k in ('contrast_positive', 'contrast_negative')) for row in references):
-        missing.append('已保存原始事件计数，但缺少正负对比阈值标定；暂不能计算事件响应误差')
+        missing.append('Raw event counts were saved, but positive/negative contrast-threshold calibration is missing; event-response error cannot yet be computed')
     availability['missing_data'] = missing
     save_json(root/'data_availability.json', availability)
     manifest['data_availability'] = 'data_availability.json'
@@ -574,36 +574,41 @@ def save_bundle_guide(root, manifest, histories):
         "sys.path.insert(0, str(root / 'code'))\n"
         'from scripts.evaluation.evaluate_experiment import main\n\n'
         "if __name__ == '__main__':\n    sys.argv.insert(1, str(root))\n    main()\n", encoding='utf-8')
-    notes = '\n'.join('- '+item for item in missing) or '无缺失项目。'
-    timing_note = ('timings.json 记录导出耗时；performance/timings.json 记录同一采样表预热后的重复测量，'
-                   '不捕获状态、不写图像。评测脚本自动使用后者。\n' if manifest.get('performance') else
-                   'timings.json 记录本次操作耗时；只有 benchmark 操作是预热后的重复性能测量。\n')
+    notes = '\n'.join('- '+item for item in missing) or 'No missing items.'
+    timing_note = ('timings.json records export duration; performance/timings.json records repeated measurements after warmup using the same sample plan,'
+                   ' without state capture or image writes. Evaluation automatically uses the latter.\n' if manifest.get('performance') else
+                   'timings.json records this operation; only benchmark operations perform repeated performance measurements after warmup.\n')
     (root/'README.txt').write_text(
-        f"SC-GS 实验数据 — {manifest['scene']}\n\n"
-        f'本文件夹保存 {expected} 个采样时刻、{len(manifest["versions"])} 个版本。\n'
-        '相机、真实时间和显示模式见 plan.json。无损图像、覆盖率和固定点轨迹见 versions/。\n'
-        '公共参考数据见 reference/，小型配置与显式指定的小型参数文件见 configs/，来源路径与文件哈希见 manifest.json。\n'
-        '不含逐帧完整模型、原始资产副本或 UI 展示视频。原始模型保留在项目目录。\n'
-        '本包可独立计算指标；重新渲染必须使用清单所标识的原模型及对应项目代码。\n'
+        f"""SC-GS experiment data — {manifest['scene']}
+
+"""
+        f"""This folder contains {expected} sample times and {len(manifest["versions"])} versions.
+"""
+        'See plan.json for cameras, actual times, and display modes; versions/ contains lossless images, coverage, and fixed-point trajectories.\n'
+        'Shared references are in reference/, small configurations and explicitly selected small parameter files in configs/, and source paths and hashes in manifest.json.\n'
+        'Full per-frame models, original asset copies, and UI demonstration videos are excluded. Original models remain in the project directory.\n'
+        'Metrics can be computed independently; rerendering requires the original models identified by the manifest and their corresponding project code.\n'
         f'{timing_note}'
-        'code/ 仅包含离线评测需要的三个脚本。\n\n'
-        '独立评测（安装 NumPy、Pillow 后，在本文件夹执行）：\n'
+        'code/ contains only the three scripts required for offline evaluation.\n\n'
+        'Independent evaluation (install NumPy and Pillow, then run in this folder):\n'
         '  python evaluate.py\n'
-        '可选 LPIPS（另需 torch、lpips 及预训练权重）：\n'
+        'Optional LPIPS (also requires torch, lpips, and pretrained weights):\n'
         '  python evaluate.py --lpips\n'
-        '结果写入 metrics.json；评测前会核对导出文件哈希。\n\n'
-        f'未提供或未对齐的数据（详见 data_availability.json）：\n{notes}\n'
-        '指标适用范围及来源限制见 data_availability.json 的 limitations 和 manifest.json 的 scene_info.motion_evidence。\n'
-        '固定点在各版本内部对应，跨版本点对应未验证；推断的部件与关节先验不等同于独立物理关节真值。\n', encoding='utf-8')
+        'Results are written to metrics.json; exported-file hashes are checked before evaluation.\n\n'
+        f"""Missing or misaligned data (see data_availability.json):
+{notes}
+"""
+        'See limitations in data_availability.json and scene_info.motion_evidence in manifest.json for metric scope and provenance limitations.\n'
+        'Fixed points correspond within each version; cross-version correspondence is unverified. Inferred part and joint priors are not independent physical-joint ground truth.\n', encoding='utf-8')
 
 
 def check_export_budget(root, archive_reserve=False):
     size = sum(path.stat().st_size for path in root.rglob('*') if path.is_file())
     if size > MAX_EXPORT_BYTES:
-        raise ValueError(f'导出超过 {MAX_EXPORT_BYTES/1024**3:g} GiB 容量上限，请缩小时间范围或降低分辨率')
+        raise ValueError(f"""Export exceeds {MAX_EXPORT_BYTES/1024**3:g} GiB; reduce time range or resolution""")
     required = (size if archive_reserve else 0) + 32*1024**2
     if shutil.disk_usage(root).free < required:
-        raise OSError(28, '服务器空间不足，导出已停止，临时文件将自动清理')
+        raise OSError(28, 'Insufficient server disk space; export stopped and temporary files will be cleaned automatically')
     return size
 
 
@@ -641,14 +646,14 @@ def _write_export(renderer, plan, destination, scene, *, reference_path=None, pr
     root = Path(destination)
     started = time.perf_counter()
     if getattr(renderer, 'loaded_source_sha256', None) and sha256(renderer.path) != renderer.loaded_source_sha256:
-        raise ValueError('模型来源文件在加载后已改变；请重新加载模型')
+        raise ValueError('Model source files changed after loading; reload the model')
     samples = [{**request, 'camera': camera_record(renderer, request)} for request in plan['samples']]
     def version_labels(sample):
         return renderer.info.get('mode_version_labels', {}).get(sample['render_mode'], renderer.info.get('version_labels', []))
     labels = version_labels(samples[0])
     version_mapping = renderer.info.get('mode_version_mapping', {}).get(samples[0]['render_mode'], [])
     if any(version_labels(sample) != labels for sample in samples):
-        raise ValueError('同一个导出计划必须包含相同的版本；请分别导出三版本模式和双版本模式')
+        raise ValueError('One export plan must contain the same versions; export three-version and two-version modes separately')
     save_json(root / 'plan.json', dict(plan, format='scgs_experiment_plan_v1', scene=scene, samples=samples))
     manifest = dict(format=FORMAT, scene=scene, operation=plan['operation'], scene_info=renderer.info,
                     export_profile='evaluation_compact_v2',
@@ -732,7 +737,7 @@ def _write_export(renderer, plan, destination, scene, *, reference_path=None, pr
             for index in range(len(samples)):
                 measurements.append(dict(repeat=repeat, **render(index)))
                 reporter.update('benchmark', completed=len(measurements), total=len(samples)*plan['repeats'],
-                                unit='renders', detail=f'第 {repeat+1}/{plan["repeats"]} 轮 · 帧 {index+1}/{len(samples)}')
+                                unit='renders', detail=f"""Repeat {repeat+1}/{plan["repeats"]} · Frame {index+1}/{len(samples)}""")
         manifest['memory_baseline'] = baseline
     if plan['operation'] != 'benchmark':
         reporter.update('frames', total=len(samples), unit='frames')
@@ -754,7 +759,7 @@ def _write_export(renderer, plan, destination, scene, *, reference_path=None, pr
             np.savez_compressed(root / 'versions' / str(side) / 'motion.npz', **motion,
                 point_ids=rows[0]['ids'], points=np.stack([row['points'] for row in rows]),
                 times_seconds=np.asarray([sample['time_seconds'] for sample in samples]))
-            label = labels[side] if side < len(labels) else renderer.info.get('left_label' if side == 0 else 'right_label', f'版本 {side+1}')
+            label = labels[side] if side < len(labels) else renderer.info.get('left_label' if side == 0 else 'right_label', f"""Version {side+1}""")
             manifest['versions'].append(dict(id=str(side), label=label,
                 **({'presentation':version_mapping[side]} if version_mapping else {}),
                 point_count=rows[0]['count'], sampled_point_count=len(rows[0]['ids']),

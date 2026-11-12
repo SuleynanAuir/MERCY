@@ -68,7 +68,7 @@ def main():
                 'source_sha256': sha256_file(source),
                 'base_vertices_sha256': hashlib.sha256(vertices.tobytes()).hexdigest(),
                 'preview_camera': json.loads((args.inspection / 'inspection.json').read_text())['camera'],
-                'motion_label': 'Lego · 原工程铲斗与连杆动画',
+                'motion_label': 'Lego · Original bucket and linkage animation',
                 'default_stream_rate': 30, 'default_resolution': 768,
                 'motion_provenance_only': {'source_animation': baker.source, 'binding': baker.binding,
                                             'rigid_rotation_max_error': baker.max_rigidity_error},

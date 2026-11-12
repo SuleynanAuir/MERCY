@@ -79,5 +79,5 @@ def color_gaussians(rgb, depth, alpha, material, fovy, background):
 
 def pseudocolor_info():
     return dict(available=True, representation='gaussian', default_resolution=1024,
-                left_label='V1 · 伪彩色', right_label='V3 · 伪彩色',
-                description='靛蓝、湖青、柔金与珊瑚橙平滑渐变，柔和亮部与清晰部件层次；配色固定在表面、随动画运动，两侧统一配色。颜色为展示配色，不代表真实材质或误差。')
+                left_label='V1 · Pseudocolor', right_label='V3 · Pseudocolor',
+                description='Smooth indigo, cyan, gold, and coral gradients provide soft highlights and clear part structure. Colors are fixed to surfaces and follow animation consistently on both sides. These are display colors, not actual materials or errors.')

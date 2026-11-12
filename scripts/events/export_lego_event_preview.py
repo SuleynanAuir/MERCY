@@ -130,7 +130,7 @@ def main():
                 'pose_fields': POSE_FIELDS, 'poses_layout': 'N_dynamic,T_frames,channels',
                 'source_sha256': report['artifact_sha256']['source_ply'],
                 'base_vertices_sha256': hashlib.sha256(vertices.tobytes()).hexdigest(),
-                'preview_camera': cache['camera'], 'motion_label': 'Lego · 原始事件校正后 · 候选预览',
+                'preview_camera': cache['camera'], 'motion_label': 'Lego · Raw-event corrected · Candidate preview',
                 'default_stream_rate': 30, 'default_resolution': 640, 'default_background': 'black',
                 'event_validation': {'optimized': True, 'approved': report['approved_for_export'],
                                      'preview_only': True, 'summary': summary,

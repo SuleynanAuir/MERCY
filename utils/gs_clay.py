@@ -193,5 +193,5 @@ def gray_gaussians(rgb, depth, alpha, fovy, background, detail_strength=.68, coo
 
 def gs_clay_info():
     return dict(available=True, representation='gaussian', default_resolution=1024,
-                left_label='V1 · 柔光白模', right_label='V3 · 柔光白模',
-                description='清晰柔光白模，抑制表面颗粒、增强部件层次；保留连续筋条、孔边与轮廓，淡线框可选。')
+                left_label='V1 · Soft-lit clay', right_label='V3 · Soft-lit clay',
+                description='Soft-lit clay suppresses surface grain and emphasizes part structure while preserving continuous ribs, hole edges, and silhouettes; a subtle wireframe is optional.')
