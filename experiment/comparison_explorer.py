@@ -1,0 +1,44 @@
+"""Shared eight-panel metric explorer for the portable and frozen reports."""
+HTML = '''<div class="metric-atlas"><div class="atlas-toolbar"><label>Time (s) <input id="sample" type="range" min="0" value="0"></label><output id="values" aria-live="polite"></output><div id="version-toggles"></div></div><div id="metric-grid" class="metric-grid"></div></div>'''
+CSS = '''
+.metric-atlas{margin-top:20px}.atlas-toolbar{position:sticky;top:0;z-index:2;background:#f3f8f8eF;border:1px solid #d9e5e8;border-radius:10px;padding:12px 16px;backdrop-filter:blur(8px)}.atlas-toolbar input[type=range]{width:min(430px,60vw);vertical-align:middle}.atlas-toolbar output{display:inline-block;margin:0 12px;font-variant-numeric:tabular-nums}.atlas-toolbar label{margin-right:18px}#version-toggles{display:inline-flex;gap:12px;flex-wrap:wrap}#version-toggles label{margin:0}.metric-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.metric-card{min-width:0;border:1px solid #dce7e9;border-radius:12px;padding:16px;background:linear-gradient(150deg,#fff,#f7fafb)}.metric-card h3{font-size:17px;margin:0 0 8px}.metric-card svg{display:block;width:100%;background:transparent;touch-action:pan-y}.metric-lines{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:#526a74}.metric-line{display:inline-block;width:24px;border-top:2px solid #536b76;margin-right:5px;vertical-align:middle}.metric-line[data-line="1"]{border-top-style:dashed}.metric-line[data-line="2"]{border-top-style:dotted}.version-0{color:#507ead}.version-1{color:#d77a38}.version-2{color:#309b8a}.version-3{color:#ad729b}.version-4{color:#879e53}.version-5{color:#cc6269}.metric-reading{font-size:11px;line-height:1.7;font-variant-numeric:tabular-nums;min-height:42px}.metric-reading span{display:inline-block;margin:2px 8px 2px 0}.metric-reading b{font-weight:600}.atlas-empty{padding:30px;text-align:center;color:#758991}@media(max-width:800px){.metric-grid{grid-template-columns:1fr}.atlas-toolbar{position:static}.metric-card{padding:10px}}
+'''
+JS = r'''
+(()=>{
+const D=JSON.parse(document.getElementById('series').textContent);
+const C=['#507ead','#d77a38','#309b8a','#ad729b','#879e53','#cc6269'],dash=['','7 4','2 3'];
+const groups=[['PSNR','dB',['foreground_psnr','psnr']],['SSIM / IoU','0–1',['ssim','foreground_ssim','iou']],['Missing area','%',['missing','part_missing']],['LPIPS','Value',['lpips']],['Event relative L1','Value',['event_l1']],['Event cosine','Value',['event_cosine']],['Polarity agreement','%',['polarity']],['No-event log-change','log-change',['silent']]];
+const slider=document.getElementById('sample'),grid=document.getElementById('metric-grid'),toggle=document.getElementById('version-toggles');
+D.names=(D.names||['V1','V2','V3']).map(name=>name.replace(/V[123]/g,v=>({V1:'MaT4DGS',V2:'Mono4DGs',V3:'Mercy (ours)'})[v]));slider.max=Math.max(0,D.times.length-1);
+D.names.forEach((name,i)=>{const label=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.checked=true;input.dataset.v=i;label.append(input,document.createTextNode(' '+name));label.className='version-'+i;toggle.append(label);input.addEventListener('change',draw)});
+function escape(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+for(const key of Object.keys(D.metrics)){D.metrics[key].label += D.metrics[key].unit ? ' ('+D.metrics[key].unit+')' : '';}
+const cards=groups.map(([title,unit,keys])=>{const card=document.createElement('div');card.className='metric-card';card.innerHTML=`<div class="metric-lines"></div><svg viewBox="0 0 560 260" role="img" aria-label="${title}"></svg><div class="metric-reading"></div>`;
+card.querySelector('.metric-lines').innerHTML=keys.map((key,j)=>`<span><i class="metric-line" data-line="${j}"></i>${escape(D.metrics[key].label)}</span>`).join('');grid.append(card);return{card,keys,svg:card.querySelector('svg'),readout:card.querySelector('.metric-reading')}});
+function draw(){const enabled=[...toggle.querySelectorAll('input:checked')].map(c=>+c.dataset.v),selected=+slider.value,current=D.times[selected]||0;
+document.getElementById('values').textContent=`t = ${current.toFixed(4)} s · ${selected+1} / ${D.times.length}`;
+for(const {keys,svg,readout}of cards){
+const available=keys.some(key=>D.metrics[key].values.some(row=>row.some(x=>x!==null)));
+svg.style.display=available?'':'none';
+if(!available){readout.innerHTML='<div class="atlas-empty">N/A</div>';continue}
+let all=[];for(const key of keys)for(const v of enabled)all.push(...D.metrics[key].values[v].filter(x=>x!==null));
+let lo=all.length?Math.min(...all):0,hi=all.length?Math.max(...all):1,pad=(hi-lo||1)*.08;lo-=pad;hi+=pad;
+const start=D.times[0]||0,end=D.times.at(-1)||1,X=t=>64+(t-start)/(end-start||1)*472,Y=v=>210-(v-lo)/(hi-lo)*178;
+let h='';for(let j=0;j<=4;j++){let val=lo+(hi-lo)*j/4,t=start+(end-start)*j/4;h+=`<path d="M64 ${Y(val)}H536" stroke="#dfe8eb"/><text x="57" y="${Y(val)+4}" text-anchor="end" font-size="10" fill="#526a74">${Math.abs(val)<.01&&val!==0?val.toExponential(1):Number(val.toPrecision(3))}</text><text x="${X(t)}" y="236" text-anchor="middle" font-size="10" fill="#526a74">${t.toFixed(2)} s</text>`}
+let readings=[];
+keys.forEach((key,k)=>{const m=D.metrics[key],event=m.values[0].length!==D.times.length,t=event?D.event_times:D.times;
+let nearest=t.reduce((best,value,j)=>Math.abs(value-current)<Math.abs(t[best]-current)?j:best,0);
+const matched=t.length&&Math.abs(t[nearest]-current)<1e-6;
+for(const v of enabled){let path='',open=false;m.values[v].forEach((value,j)=>{if(value===null){open=false;return}path+=(open?'L':'M')+X(t[j])+','+Y(value)+' ';open=true});h+=`<path d="${path}" fill="none" stroke="${C[v]}" stroke-width="1.6" stroke-dasharray="${dash[k]}"/>`;
+if(matched&&m.values[v][nearest]!==null)h+=`<circle cx="${X(current)}" cy="${Y(m.values[v][nearest])}" r="3" fill="${C[v]}" stroke="white"/>`}
+readings.push(`<div><b>${escape(m.label)}</b> `+enabled.map(v=>`<span class="version-${v}">${escape(D.names[v])}: ${!matched?'N/A':m.values[v][nearest]===null?'N/A':Number(m.values[v][nearest].toPrecision(5))}</span>`).join('')+'</div>');
+});
+h+=`<path d="M${X(current)} 25V210" stroke="#8399a4" stroke-dasharray="4 4"/>`;if(!all.length)h+='<text x="285" y="125" text-anchor="middle" fill="#657d85">N/A</text>';
+svg.innerHTML=h;readout.innerHTML=readings.join('');
+}
+}
+slider.addEventListener('input',draw);
+for(const {svg}of cards)svg.addEventListener('pointermove',e=>{if(e.pointerType==='touch'&&!e.buttons)return;const b=svg.getBoundingClientRect(),fraction=Math.max(0,Math.min(1,((e.clientX-b.left)/b.width*560-64)/472)),time=D.times[0]+fraction*(D.times.at(-1)-D.times[0]);let index=D.times.reduce((best,t,j)=>Math.abs(t-time)<Math.abs(D.times[best]-time)?j:best,0);if(index!==+slider.value){slider.value=index;draw()}});
+draw();
+})();
+'''

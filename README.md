@@ -2,78 +2,84 @@
 
 **Monocular Event-boosted Locally Rigid Motion and Coherent 4D Gaussian Reconstruction**
 
-MERCY combines monocular RGB observations, event supervision, articulated motion priors, and locally rigid Gaussian representations. This repository is a curated research-code release derived from SC-GS, with one documented MERCY pipeline and its required implementation dependencies.
+MERCY reconstructs coherent dynamic 3D Gaussians from a fixed monocular viewpoint, combining RGB video, event streams, and part-level motion constraints.
 
-![Pipeline](docs/figures/pipeline.webp)
+**Authors:** Liang Yirui, Chen Qianqi, Li Minghao.
 
-## Release scope
+[📄 Technical Report](project_page/ppt_all.pdf) · [🌐 Project Page](project_page/index.html) · [🎬 Reconstruction Demo](project_page/assets/web/reconstruction-4k.mp4)
 
-The retained pipeline performs joint-constrained motion refinement, coherent binding, surface reconstruction, appearance refinement, bounded local joint-MLP compensation, and Gaussian sequence export. Original Blender motion and geometry priors are explicit inputs. This is not an end-to-end reconstruction of unknown motion or unseen surfaces from events alone.
+## Dataset
 
-Historical five-scene adaptation experiments, alternative standalone training branches, generated outputs, caches, raw datasets, checkpoints, deployment files, and duplicate media are excluded. Version-like filenames in required dependencies are preserved for checkpoint and import compatibility; they do not define separate supported releases. No measured claim of a globally best checkpoint is made: the source does not provide a single independently validated winner across all scenes.
+![MERCY dataset overview](project_page/assets/mercy_data.png)
 
-## Installation
+Nine Blender scenes: **Arm, Fan, Gears, Lamp, Lego, Metronome, Microphone, Robot, and Rotation**. Each provides a **640 × 640, 30 FPS RGB video**, its first frame, an ESIM-simulated event stream `(x, y, t, p)`, and camera intrinsics `K` (PDF pp. 8–14).
 
-Use Linux with an NVIDIA CUDA GPU for rendering and optimization. Python 3.10 is recommended. Install a compatible PyTorch, CUDA toolkit, and PyTorch3D environment before the requirements below. The original event environment used PyTorch 2.1.2; this release has not independently validated a complete GPU environment.
+## Workflow
 
-```bash
-git clone --recurse-submodules https://github.com/SuleynanAuir/MERCY.git
-cd MERCY
-python -m venv .venv
-source .venv/bin/activate
-# Install PyTorch and PyTorch3D matching your CUDA environment first.
-pip install -r requirements.txt
-pip install ./submodules/simple-knn
-pip install ./submodules/diff-gaussian-rasterization
-```
+![MERCY motion modeling and event supervision pipeline](project_page/assets/web/pipeline-wide.webp)
 
-Blender is required when extracting source geometry or animation. Use explicit paths for your own data and output directories. Large assets are intentionally distributed separately from source code; no downloadable checkpoint or dataset is promised by this release.
+The following stages follow PDF pp. 15, 34–58, and 70–80.
 
-## Pipeline entry points
+| Step | Action | Output |
+| --- | --- | --- |
+| 1. Prepare data | Render Blender animations, extract the first frame, simulate events with ESIM, and collect camera intrinsics. | RGB frames, events, and camera parameters |
+| 2. Initialize Gaussians | Generate a static mesh from the first frame with Hunyuan3D 3.1, then convert it with Mesh2Splat. | Initial Gaussians G₀ |
+| 3. Refine initialization | Apply CARE-GS camera alignment, Gaussian refinement, and continuity enhancement. | Corrected G₀ |
+| 4. Identify parts | Assign part labels with PartField; use FEAST optical flow and events to separate moving and static parts. | Part labels and dynamic part IDs |
+| 5. Estimate motion | Estimate transformations using COLMAP, ICP, Kabsch, and SVD, with MonoGS monocular video supervision. | Part motion sequences |
+| 6. Constrain joints | Extract key joints with CuRobo and UniPhysGen, build a parent–child joint tree, smooth trajectories with Catmull–Rom interpolation, and apply forward kinematics. | Connected, smooth part motion |
+| 7. Optimize and render | Freeze static parts; refine motion with the MotionFineTuner MLP, weighted positive/negative events, multi-scale pooling, and rendering-based event supervision. | Dynamic Gaussians and rendered video |
 
-Run scripts from the repository root. Inspect each entry point with `--help` after installing its dependencies; the stages require scene-specific assets and are not a universal one-command trainer.
+## Methods
 
-| Stage | Entry point |
+Method names follow PDF pp. 61–78.
+
+| Method | Description |
 | --- | --- |
-| Joint structure | `scripts/motion/lego_joint_structure.py` |
-| Event-guided motion | `scripts/events/refine_lego_temporal.py` |
-| Coherent binding | `scripts/motion/rebind_lego_coherent.py` |
-| Rigid surface reconstruction | `scripts/geometry/rebuild_lego_rigid_surfaces.py` |
-| Geometry-prior completion | `scripts/geometry/build_lego_multiview_completion.py` |
-| Appearance refinement | `scripts/appearance/refine_lego_appearance.py` |
-| Local joint MLP | `scripts/deformation/train_v4_local_mlp.py` |
-| Audited sequence export | `scripts/events/export_lego_event_preview.py` |
-| Lossless sequence packing | `scripts/export/pack_gaussian_sequence.py` |
+| MaTGS | Drives Gaussian motion with estimated rigid transformation matrices. |
+| MonoGS | Adds monocular video supervision to improve appearance; disconnected parts can remain. |
+| MERCY | Adds part-aware joint structure, motion smoothing, and event-supervised refinement for coherent motion and geometry. |
 
-For example, local MLP training consumes an existing, provenance-compatible base-field checkpoint:
+## Results
 
-```bash
-python scripts/deformation/train_v4_local_mlp.py \
-  --base-field /path/to/base-field.pt --output outputs/local-joint-mlp --steps 800
-```
+![Dynamic Gaussian reconstruction across nine objects](project_page/assets/web/reconstruction.gif)
 
-This stage freezes the parent MERCY representation and uses training events for bounded joint compensation. Keep the parent model, camera, event calibration, joint assignments, and checkpoint hashes together. Do not apply compensation twice to an already baked sequence. See [reproduction notes](docs/REPRODUCTION.md).
+**Image reconstruction quality — PDF p. 83.** MERCY achieves the highest PSNR and SSIM, lowest LPIPS, and best or tied-best IoU across the nine objects. Higher PSNR, SSIM, and IoU are better; lower LPIPS is better.
 
-## Dataset and visual reference
+![Table 1: Image reconstruction quality](project_page/assets/tables/01_reconstruction.png)
 
-![Dataset overview](docs/figures/dataset.png)
+**Foreground quality and coverage — PDF p. 84.** Foreground reconstruction improves while missing regions are reduced.
 
-The source project presents nine scenes: Arm, Fan, Gears, Lamp, Lego, Metronome, Microphone, Robot, and Rotation. The curated command-line pipeline is primarily Lego-specific; this image does not imply that every scene has an interchangeable training configuration.
+![Table 2: Foreground quality and coverage](project_page/assets/tables/02_foreground_coverage.png)
 
-![Source-project reconstruction overview](docs/figures/reconstruction.webp)
+**Efficiency — PDF p. 85.** Latency decreases in scenes such as Lamp, Gears, and Rotation, while complex scenes such as Lego and Metronome incur additional overhead.
 
-These figures are retained source-project illustrations, not new results reproduced during repository cleanup. No historical performance table is promoted to a verified benchmark here.
+![Table 4: Computational efficiency](project_page/assets/tables/04_efficiency.png)
 
-## Validation
+**Event consistency — PDF p. 86.** MERCY reduces Event L1, improves event cosine similarity and polarity agreement, and suppresses changes in no-event regions.
 
-```bash
-python scripts/check_release.py
-```
+![Table 5: Event consistency](project_page/assets/tables/05_event_consistency.png)
 
-GitHub Actions runs the same dependency-free source and packaging checks. GPU training and rendering require the original assets and CUDA environment and are not covered by this check.
+## Key Concepts
 
-## Attribution and license
+- **Dynamic Gaussians:** 3DGS represents a spatial scene; 4DGS also describes its evolution over time.
+- **Event supervision:** Events encode pixel-level log-intensity changes as position, timestamp, and polarity, providing motion supervision.
+- **Local rigidity:** Gaussians within a moving part share a rigid transformation, while static parts remain fixed.
+- **Joint and temporal coherence:** A joint tree, forward kinematics, and trajectory interpolation preserve connections and smooth motion beyond independent rotations and translations.
 
-This project builds on SC-GS, Deformable 3D Gaussians, and 3D Gaussian Splatting. The original MERCY documentation credits Liang Yirui, Chen Qianqi, and Li Minghao. Retained SC-GS code remains subject to its [upstream MIT notice](docs/LICENSE-SC-GS); see also the repository [LICENSE](LICENSE). CUDA submodules carry their own licenses.
+See PDF pp. 3–7, 20–24, 66, and 74–78.
 
-See [release provenance](docs/RELEASE.md) for selection criteria and source hashes.
+## Acknowledgments
+
+We thank all professors and co-supervisors, and acknowledge the tools and platforms shown below.
+
+<p align="center">
+  <img src="project_page/thanks_logo/acknowledgments-top.png" width="100%" alt="All Professors and Co-supervisors, Blender, NVIDIA, EA, Tencent"><br>
+  <img src="project_page/thanks_logo/acknowledgments-bottom.png" width="100%" alt="Hunyuan Model, Hugging Face, NumPy, AutoDL, VAST AI Research">
+</p>
+
+This project builds on SC-GS, Deformable 3D Gaussians, and 3D Gaussian Splatting.
+
+## Resources and License
+
+Technical content and results follow the [technical report](project_page/ppt_all.pdf); figures come from `project_page/assets/`. See the [project page instructions](project_page/README.md) for local preview and [LICENSE](LICENSE) for repository terms. Upstream licenses also apply.

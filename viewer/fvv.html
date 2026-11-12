@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Live Gaussian Viewer · MERCY</title><link rel="icon" href="data:,"><link rel="stylesheet" href="/fvv/fvv.css"><script src="/fvv/english.js" defer></script><script src="/fvv/fvv-loop-cache.js" defer></script><script src="/fvv/fvv.js" defer></script><script src="/fvv/fvv-manager.js" defer></script><script src="/fvv/fvv-export.js" defer></script></head>
+<body><header><a id="back" href="/">← Back to Viewer</a><strong>Live Gaussian Viewer</strong><span>Hybrid 3D-4DGS · FVV</span></header>
+<main><section class="view"><canvas id="fvvCanvas" tabindex="0" aria-label="Dynamic Gaussian free view; drag to orbit, WASD to move, QE vertical movement"></canvas><div id="message" role="status">Checking available models…</div></section>
+<aside><section class="model-panel"><h1>Models and Training</h1>
+<p>Load a trained model or train independently. The original viewer's model and quality settings remain unchanged.</p>
+<label>Existing Models<select id="modelSelect" aria-label="Existing Models"></select></label><button id="loadModel" disabled>Load and Browse</button><button id="deleteModel" disabled>Delete Selected Model</button><p class="note">Names include the object and training completion time. The active model cannot be deleted. Deletion frees its storage.</p>
+<label>Training Profile<select id="trainingProfile" aria-label="Training Profile"></select></label><button id="startTraining" disabled>Start Training</button>
+<p class="note">Training uses the configured real scene data. Load the new model after training completes. Shared GPU training consumes compute resources.</p>
+<label>Import a trained model package<input id="modelFile" type="file" accept=".zip,application/zip"></label><button id="importModel" disabled>Import and Load</button>
+<p class="note">ZIP root must contain model.pth、effective.yaml、manifest.json; Upload limit: 512 MiB. Original project PLY/NPZ is not supported by this format.</p>
+<progress id="modelProgress" max="100" value="0" hidden aria-label="Model task progress"></progress><p id="modelTask" role="status">Reading the model list…</p>
+<button id="loadTrained" hidden>Load Training Result</button></section><h2>Free View</h2><p>Drag to orbit; W / S forward/backward, A / D left/right, Q / E to move vertically; scroll to move forward or backward. Click the canvas before using the keyboard.</p><button id="reset">Reset Camera</button>
+<label>Movement Speed <input id="speed" type="number" min="0.01" max="100" step="0.1" value="1"> scene units / s</label>
+<label>Preview Resolution<select id="resolution"><option value="640">640 px</option><option value="960" selected>960 px</option><option value="1280">1280 px</option></select></label>
+<label>Transfer Quality<select id="imageQuality"><option value="92">Standard</option><option value="95" selected>High · More surface detail</option><option value="98">Fine · Higher bandwidth</option></select></label>
+<label>Motion Quality<select id="temporalSamples"><option value="3" selected>Anti-flicker · Short-exposure sampling</option><option value="1">Single sample · Higher frame rate</option></select></label><p class="note">Anti-flicker adds GPU overhead; fast-moving edges may soften slightly. Pausing restores single sampling.</p>
+<label>Target Frame Rate<select id="frameRate"><option value="60">60 FPS</option><option value="90" selected>90 FPS</option><option value="120">120 FPS</option></select></label><p class="note">Display frame rate is limited by monitor refresh rate, network, and GPU limits. Target frame rate does not reduce image quality. Live preview uses a bounded buffer; fully preloaded sequences play locally.</p>
+<label>Vertical Field of View<input id="fov" type="range" min="20" max="100" value="60"></label>
+<label><input id="adaptivePreview" type="checkbox" checked>Adaptive preview while moving (minimum 640 px)</label><p class="note">While moving, single sampling improves responsiveness. Anti-flicker resumes when still. Disable adaptive preview to keep the selected resolution; model precision is unchanged.</p>
+<label><input id="smoothLoop" type="checkbox">Preload when still for smooth loop playback</label><p id="cacheStatus" class="note">Once preloaded, the current view plays without per-frame network transfers. Moving the camera triggers new rendering. Memory-only cache, up to 96 MiB image data.</p>
+<h2>Orbit Video</h2>
+<label>Camera Path<select id="orbitPath"><option id="legoOverviewPath" value="overview" selected>Lego Full Overview · Gentle elevation changes</option><option id="legoOrbitPath" value="showcase">Lego Short Arc · Gentle front-view motion</option><option value="full">Full 360° Orbit · Start from the current view</option></select></label>
+<label>Video Duration<select id="orbitSeconds"><option value="6">6 s</option><option value="12">12 s</option><option value="24" selected>24 s</option></select></label>
+<label>Video Frame Rate<select id="orbitFps"><option value="30">30 FPS</option><option value="60" selected>60 FPS</option></select></label>
+<label>Video Resolution<select id="orbitWidth"><option value="640">640 × 360</option><option value="960">960 × 540</option><option value="1280" selected>1280 × 720</option></select></label>
+<label>Target Distance<input id="orbitRadius" type="number" value="1.5" min="0.2" max="20" step="0.1"></label>
+<label>Elevation range<input id="orbitElevation" type="number" value="15" min="0" max="35" step="1"> °</label>
+<p class="note">The overview path completes a full orbit at a fixed distance, with elevation varying only between 1°–3°with smooth acceleration and the whole object in frame. The short-arc path starts from Lego the original front view, slowly rotating 3°、raise 0.5°before returning at a fixed distance and framing, without moving behind the object. Full orbit uses the current camera, target distance, and elevation range, and may reveal incomplete reconstruction. Animation continues; the video excludes UI text.</p>
+<button id="saveOrbit">Export Dynamic Gaussian Orbit Video</button><button id="cancelOrbit" hidden>Cancel Export</button>
+<progress id="orbitProgress" max="100" value="0" hidden></progress><p id="orbitStatus" role="status"></p>
+<p class="note">Export uses GPU, may temporarily reduce the browsing frame rate. MP4 includes a parameter summary; JSON stores each frame's full trajectory separately. Per-export limit: 256 MiB, Total export budget 1 GiB; Server copies can be deleted after downloading.</p>
+<div id="orbitDownloads"></div>
+<h2>Animation Time</h2><button id="play" disabled>Pause</button><input id="time" aria-label="Model Time" type="range" min="0" max="1" step="0.001" value="0" disabled><output id="timestamp">—</output>
+<p id="metrics">Waiting for rendering</p><button id="reconnect">Reconnect</button><button id="report">Download Performance Records</button>
+<p class="note">Rendered by GPU renders the current camera in real time. Image transfer quality is increased by default; model precision is unchanged. Low frame rates are reported without automatically reducing model quality.</p><p class="note">Untrained scenes are not replaced with videos or other models. Deployment and validation: assets/technical/14-hybrid-fvv.md. </p></aside></main></body></html>

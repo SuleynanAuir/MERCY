@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f3f7f6">
+  <title>SC–GS · Dynamic Gaussian Viewer</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/style.css">
+  <script src="/english.js" defer></script><script src="/playback.js" defer></script>
+  <script src="/references.js" defer></script>
+  <script src="/app.js" defer></script>
+<link rel="icon" href="data:,"></head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="SC-GS Dynamic Gaussian Viewer"><span class="brand-mark">✳</span><strong>SC–GS</strong><span class="divider"></span><span>Dynamic Gaussian Viewer</span></a>
+    <div class="connection"><span id="statusDot" class="dot"></span><span id="connectionText" role="status">Connecting</span><span class="local-tag">LOCAL / GPU</span></div>
+  </header>
+  <main class="workspace">
+    <section id="viewerPanel" class="viewport" aria-label="3D Gaussian and mesh comparison viewport">
+      <div class="viewport-top"><span id="sceneKind" class="eyebrow">GAUSSIAN SCENE</span><span id="sceneName">Loading scene…</span><span id="sequenceBadge" class="badge">Per-frame Gaussians · Live rendering</span></div>
+      <div class="view-toolbar" aria-label="Current viewpoint and rendering status">
+        <div class="view-badge"><span class="live-dot"></span><span id="viewLabel">Perspective View</span></div>
+        <div class="render-stats"><span><b id="displayFps">—</b> Display FPS</span><span><b id="renderMs">—</b> <span id="renderKind">ms Render</span></span></div>
+        <button id="expandView" class="expand-button" title="Show both comparison views fullscreen">Expand Comparison</button>
+        <button id="resetFloating" class="floating-button" title="Reset View (R)" aria-label="Reset View">↺</button>
+      </div>
+      <div id="detailTools" class="detail-tools" hidden>
+        <button id="detailToggle" aria-pressed="false" aria-controls="detailOptions">Detail Regions</button>
+        <div id="detailOptions" class="detail-options" hidden>
+          <button id="detailAdd">＋ Add Region</button>
+          <label>Current Region <select id="detailSelect" aria-label="Current Region"></select></label>
+          <button id="detailRemove">Remove Region</button><button id="detailClear">Clear</button>
+          <span>Drag inside to move · drag edges / drag edges or corners to resize</span>
+        </div>
+      </div>
+      <div class="comparison-rows">
+      <div id="stage" class="stage" tabindex="0" aria-label="Synchronized method comparison; drag to orbit, Shift drag to pan; scroll to zoom">
+        <section id="leftRenderCell" class="view-cell render-cell" aria-label="No. 1 Column MaT4DGS">
+          <div id="leftCompareLabel" class="compare-label left" hidden>MaT4DGS</div>
+          <div class="cell-image"><canvas id="canvas" aria-label="MaT4DGS Dynamic rendering"></canvas><canvas id="detailLeft" class="detail-overlay" aria-hidden="true" hidden></canvas></div>
+        </section>
+        <section id="middleRenderCell" class="view-cell render-cell" aria-label="Mono4DGs" hidden>
+          <div id="middleCompareLabel" class="compare-label middle" hidden>Mono4DGs</div>
+          <div class="cell-image"><canvas id="middleCanvas" aria-label="Mono4DGs Dynamic rendering" hidden></canvas><canvas id="detailMiddle" class="detail-overlay" aria-hidden="true" hidden></canvas></div>
+        </section>
+        <section id="rightRenderCell" class="view-cell render-cell" aria-label="Mercy (ours)" hidden>
+          <div id="rightCompareLabel" class="compare-label right" hidden>Mercy (ours)</div>
+          <div class="cell-image"><canvas id="comparisonCanvas" aria-label="Mercy (ours) Dynamic rendering" hidden></canvas><canvas id="detailRight" class="detail-overlay" aria-hidden="true" hidden></canvas></div>
+        </section>
+        <section id="rgbCell" class="view-cell reference-cell" aria-label="No. 3 Column RGB Video" hidden>
+          <div class="compare-label reference-label"><strong>RGB Video</strong><span title="Only the display background changes; source video and camera coordinates are preserved.">White background · Fixed camera</span></div>
+          <div class="cell-image"><canvas id="rgbCanvas" aria-label="RGB source video, synchronized with all methods"></canvas></div>
+        </section>
+        <section id="eventCell" class="view-cell reference-cell" aria-label="No. 4 event video column, aligned to RGB Camera" hidden>
+          <div class="compare-label reference-label"><strong>Event Camera Video</strong><span id="referenceAlignment">Aligned RGB</span></div>
+          <div class="cell-image"><canvas id="eventCanvas" aria-label="Event video using RGB camera pixel coordinates and timeline"></canvas></div>
+        </section>
+        <div id="overlay" class="overlay">
+          <div class="loading-card">
+            <div class="loading-heading"><div class="loader" aria-hidden="true"></div><div><div class="loading-eyebrow">Preparing your dynamic view</div><h1 id="loadTitle">Connect to rendering server</h1></div><span id="loadPercent" class="loading-percent" aria-hidden="true">0%</span></div>
+            <p id="loadMessage" role="status">Connecting. Your view will be ready shortly.</p>
+            <progress id="loadProgress" max="100" value="0" aria-label="Rendering progress"></progress>
+            <div id="loadViews" class="loading-views" aria-label="Preparation status of six viewpoints" hidden><div id="loadView0" class="load-view" data-state="waiting">Front · Waiting</div><div id="loadView1" class="load-view" data-state="waiting">Oblique · Waiting</div><div id="loadView2" class="load-view" data-state="waiting">Side · Waiting</div><div id="loadView3" class="load-view" data-state="waiting">Back · Waiting</div><div id="loadView4" class="load-view" data-state="waiting">Top · Waiting</div><div id="loadView5" class="load-view" data-state="waiting">Bottom · Waiting</div></div>
+            <button id="retryViews" class="secondary-button" hidden>Retry Rendering</button>
+          </div>
+        </div>
+      </div>
+      <div id="detailRow" class="detail-row" aria-label="Synchronized detail comparison across methods" hidden></div>
+      </div>
+      <div class="viewport-hint" id="viewHint">Drag to orbit <span>·</span> Shift + drag to pan <span>·</span> Scroll to zoom</div>
+      <section class="transport" aria-label="Animation playback controls">
+        <div class="playback-preparation" aria-label="Playback Status"><span class="preparation-label">Playback Status</span><p id="streamStatus" role="status" aria-atomic="true" tabindex="0">Frame-by-frame</p></div>
+        <div class="transport-top"><span class="eyebrow">TIMELINE</span><span id="motionLabel" class="motion-label">Waiting for sequence</span><span id="timeLabel" class="time-label"><span id="timeCurrent">0.00</span> <small id="timeTotal">/ — s</small></span></div>
+        <label class="sr-only" for="timeline">Animation frame</label><input id="timeline" type="range" min="0" max="359" value="0" step="1" disabled>
+        <div class="timeline-ticks"><span>0 s</span><span id="tickMid">3 s</span><span id="tickEnd">6 s</span></div>
+        <div class="transport-bottom">
+          <div class="play-controls"><button id="restart" class="icon-button" title="Restart Playback" aria-label="Return to first frame" disabled>↤</button><button id="previous" class="icon-button" title="Previous frame" aria-label="Previous frame" disabled>‹</button><button id="play" class="play-button" aria-label="Play" disabled>▶ <span>Play</span></button><button id="next" class="icon-button" title="Next frame" aria-label="Next frame" disabled>›</button><span id="frameLabel" class="frame-label">frames — / —</span></div>
+          <div class="play-options"><label class="check-label" hidden><input id="smoothPlayback" type="checkbox" disabled>Play after pre-rendering all six views</label><label for="speed">Speed</label><select id="speed"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select><select id="streamRate" aria-label="Playback frame rate"><option value="auto">Auto · Prioritize smooth playback</option><option value="60" selected>60 FPS</option><option value="30">30 FPS · Reduced bandwidth</option></select><label class="check-label"><input id="loop" type="checkbox">Loop</label></div>
+        </div>
+      </section>
+    </section>
+    <aside class="inspector" aria-label="Scene and view settings">
+      <section class="panel" aria-label="Rendering Mode">
+        <h2>Rendering Mode</h2>
+        <a id="observationViewLink" class="secondary-button" href="?pipeline=observations">Six-View Observation</a>
+        <p id="pipelineNote" class="setting-note"></p>
+      </section>
+      <section class="panel"><h2>Free View</h2><a id="realtimeGaussian" class="secondary-button" href="/fvv">Live Gaussian Viewer ↗</a><p class="setting-note">Open the standalone Hybrid 4DGS viewer.</p></section>
+      <section class="panel"><h2>Object Selection</h2><div class="field"><label for="objectSelect">Current Object</label><select id="objectSelect" disabled><option>Loading objects…</option></select></div></section>
+      <section class="panel"><div class="panel-title"><h2>Scene Information</h2><span class="small-badge">BAKED</span></div><p id="sceneDescription" class="scene-description"></p><div class="big-number" id="gaussianCount">—</div><div id="primitiveLabel" class="number-label">GAUSSIANS</div><dl class="scene-stats"><div><dt>Sequence Frames</dt><dd id="frameCount">—</dd></div><div><dt>Sample Rate</dt><dd id="sourceFps">—</dd></div><div><dt>Duration</dt><dd id="duration">—</dd></div><div><dt>Rotation Speed</dt><dd id="rpm">—</dd></div></dl></section>
+      <section class="panel"><h2>View</h2><div class="preset-row"><button class="preset active" data-yaw="0" data-pitch="0">Front</button><button class="preset" data-yaw="35" data-pitch="20">Oblique</button><button class="preset" data-yaw="80" data-pitch="0">Side</button></div><div class="preset-row"><button class="preset" data-yaw="180" data-pitch="0">Back</button><button class="preset" data-yaw="0" data-pitch="35">Top</button><button class="preset" data-yaw="0" data-pitch="-35">Bottom</button></div><button id="reset" class="secondary-button">Reset View <kbd>R</kbd></button></section>
+      <section class="panel"><h2>Render Settings</h2><div class="field"><label for="renderMode">Display Mode</label><select id="renderMode" disabled><option value="gaussian">Gaussian · Gaussians</option><option id="meshOption" value="mesh" disabled>Mono4DGs / Mercy (ours) Pure Mesh</option><option id="clayOption" value="clay" disabled>Clay · Soft lighting</option><option id="pseudocolorOption" value="pseudocolor" disabled>Pseudocolor · Soft lighting</option><option id="hybridOption" value="hybrid" disabled>Mesh＋GS · Dynamic</option></select></div><div id="clayStyleField" class="field" hidden><label for="clayWire">Show Surface Wireframe</label><input id="clayWire" type="checkbox"></div><div id="hybridQualityField" class="field" hidden><label for="hybridQuality">Hybrid Quality</label><select id="hybridQuality"><option value="surface" selected>Surface smoothing</option><option value="native">GS Native appearance</option><option value="balanced">Legacy balanced</option><option value="detail">Legacy high sampling</option></select></div><p id="meshNotice" class="setting-note" role="status">Checking Mesh…</p><div class="field"><label for="resolution">Resolution</label><select id="resolution"><option value="512">Smooth · 512 px</option><option value="640">Standard · 640 px</option><option value="768" selected>Balanced · 768 px</option><option value="1024">Fine · 1024 px</option><option id="ultraResolution" value="1280">Ultra · 1280 px</option></select></div><div class="field"><span id="backgroundLabel">Background</span><div class="swatches" role="group" aria-labelledby="backgroundLabel"><button class="swatch black" data-background="black" aria-label="Black background (event reference)" aria-pressed="false"></button><button class="swatch dark active" data-background="dark" aria-label="Dark background" aria-pressed="true"></button><button class="swatch gray" data-background="gray" aria-label="Gray background" aria-pressed="false"></button><button class="swatch light" data-background="light" aria-label="White background" aria-pressed="false"></button></div></div><button id="snapshot" class="secondary-button" disabled>Save Current View <span>↓</span></button><p class="setting-note">Higher resolution requires more bandwidth. Display frame rate differs from sequence sampling rate.</p></section>
+      <section class="panel experiment-panel" aria-labelledby="experimentHeading"><h2 id="experimentHeading">Export Experiment Data</h2>
+        <div class="comparison-launch"><label for="comparisonObjectName">Object name<input id="comparisonObjectName" type="text" maxlength="40" placeholder="e.g. lego / crane" autocomplete="off"></label><a id="comparisonVisualize" class="secondary-button comparison-link" href="/comparison" target="_blank" rel="noopener">Comparison Dashboard ↗</a></div>
+        <p class="setting-note">Results saved to experiment/output/Object name_timestamp/, PNG and ZIP use the same prefix.</p>
+        <p class="setting-note">Uses the configured methods and references, ground-truth camera, native resolution, and background. Samples the full sequence every 2 frames. Generates a sampling plan, then runs 20 warm-ups and 5 measurement rounds, with no file selection required.</p>
+        <button id="experimentAll" class="secondary-button experiment-primary">Export All Experiment Data ↓</button>
+        <div id="experimentProgress" class="experiment-progress" hidden>
+          <div class="experiment-progress-heading"><span id="experimentProgressLabel">Overall progress</span><strong id="experimentPercent">0%</strong></div>
+          <progress id="experimentProgressBar" max="100" value="0" aria-labelledby="experimentProgressLabel" aria-describedby="experimentStage experimentDetail"></progress>
+          <p id="experimentStage" class="experiment-stage">Waiting for export</p>
+          <p id="experimentDetail" class="experiment-detail"></p>
+          <p class="experiment-progress-note">Progress reflects completed work in each stage, not remaining time. The browser downloads files when ready.</p>
+        </div>
+        <p class="setting-note">Rendered frames, RGB ground truth, shared masks, event counts and calibration, motion, camera timelines, configuration, and performance records are packaged for download. References are stored once; repeated measurements do not duplicate images. Package limit: 2 GiB. Missing data is noted in the manifest.</p>
+        <details class="experiment-advanced"><summary>Advanced Options · Change settings or export individually</summary>
+        <div class="field"><label for="experimentStep">Sampling Interval</label><input id="experimentStep" type="number" min="1" max="10000" step="1" value="2"></div>
+        <div class="field"><label for="experimentWarmup">Warm-up Iterations</label><input id="experimentWarmup" type="number" min="1" max="100" step="1" value="20"></div>
+        <div class="field"><label for="experimentRepeats">Measurement Rounds</label><input id="experimentRepeats" type="number" min="1" max="100" step="1" value="5"></div>
+        <p class="setting-note">These settings apply to Export All. Frame ranges and manually saved or imported sampling plans below apply only to individual operations.</p>
+        <button id="experimentFrame" class="secondary-button">Save Current Frame Comparison ↓</button>
+        <div class="field"><label for="experimentStart">Start frame (zero-based: 0 based)</label><input id="experimentStart" type="number" min="0" step="1" value="0"></div>
+        <div class="field"><label for="experimentEnd">End frame (inclusive; blank for last)</label><input id="experimentEnd" type="number" min="0" step="1" placeholder="Last frame"></div>
+        <button id="experimentPlanSave" class="secondary-button">Save Current Camera and Timeline ↓</button>
+        <div class="field experiment-file"><label for="experimentPlanFile">Optional: load an existing sampling plan</label><input id="experimentPlanFile" type="file" accept=".json,application/json"></div>
+        <p id="experimentPlanStatus" class="setting-note">No file selection needed: without a loaded sampling plan, sequence export and benchmarks use the ground-truth camera and full timeline.</p>
+        <button id="experimentSequence" class="secondary-button" disabled>Export Fixed Sequence ↓</button>
+        <button id="experimentBenchmark" class="secondary-button" disabled>Run Benchmark</button>
+        </details>
+        <a id="experimentDownload" class="secondary-button" hidden download>Download Experiment Data ZIP ↓</a>
+        <p id="experimentLocation" class="setting-note" hidden></p>
+        <p id="experimentStatus" class="setting-note" role="status" aria-live="polite">The lightweight evaluation package supports standalone metrics. Re-rendering requires the original models. Unconfigured independent references are marked missing.</p>
+      </section>
+      <section class="panel"><h2>Full Videos</h2><p class="setting-note">Full duration · Same camera · Colored regions＋Details · available modes for the current object, packaged as ZIP</p>
+        <button id="exportVideo" class="secondary-button">Export Full Videos for All Modes ↓</button>
+        <button id="cancelExport" class="secondary-button" hidden>Cancel Export</button>
+        <a id="exportDownload" class="secondary-button" hidden download>Download Full Video ZIP ↓</a>
+        <p id="exportStatus" class="setting-note" role="status">Export WebM video at the source frame rate.</p>
+      </section>
+      <section class="gpu-card"><span class="chip-icon">▦</span><div><strong id="gpuName">Waiting GPU</strong><p id="cacheInfo">Initializing renderer</p></div><span class="dot" id="gpuDot"></span></section>
+      <div class="shortcuts"><span><kbd>Space</kbd> Play / Pause</span><span><kbd>←</kbd><kbd>→</kbd> Frame-by-frame</span><p>Free view renders the current camera directly. Six-view observation plays locally after pre-rendering. Each page manages its own camera, playback position, and cache.</p></div>
+    </aside>
+  </main>
+  <footer><span>SC–GS MOTION LAB</span><span>Browser interaction · server GPU Render · Original inputs are retained separately</span></footer>
+</body>
+</html>
